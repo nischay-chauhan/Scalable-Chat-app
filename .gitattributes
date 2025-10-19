@@ -1,0 +1,7 @@
+* text=auto eol=lf
+
+# Treat lockfiles as text and merge conservatively
+pnpm-lock.yaml merge=union
+
+# Ensure shell scripts use LF
+*.sh text eol=lf
