@@ -3,14 +3,15 @@ import { User } from "./type";
 
 export const addUser = async(username : string , room : string) => {
     const id = generateId();
-
+    console.log("Adding user : " , username , " to room : " , room , " with id : " , id);
     try{
         await new Promise((resolve , reject) => {
             db.run(
                 "INSERT INTO users (id , username , room) VALUES (?, ?, ?)" , 
-                [id, username, room] ,
+                id, username, room,
                 (error) => {
                     if(error){
+                        console.log("Error adding user : " , error)
                         reject(error)
                     }else{
                         resolve(true)
@@ -31,7 +32,7 @@ export const removeUser = async(id : string) => {
         await new Promise((resolve , reject) => {
             db.run(
                 "DELETE FROM users WHERE id = ?" , 
-                [id] ,
+                id,
                 (error) => {
                     if(error){
                         reject(error)
@@ -54,7 +55,7 @@ export const getUserByUsername = async(username : string) => {
         const user = await new Promise<any>((resolve , reject) => {
             db.all(
                 "SELECT * FROM users WHERE username = ?" , 
-                [username] ,
+                username,
                 (error , rows) => {
                     if(error){
                         reject(error)
@@ -77,7 +78,7 @@ export const getUsersInRoom = async (room:string) => {
         const users = await new Promise<any>((resolve , reject) => {
             db.all(
                 "SELECT * FROM users WHERE room = ?" , 
-                [room] ,
+                room,
                 (error , rows) => {
                     if(error){
                         reject(error)
@@ -93,4 +94,5 @@ export const getUsersInRoom = async (room:string) => {
        return {success : false , error : error.toString()}
     }
 }
+
 
