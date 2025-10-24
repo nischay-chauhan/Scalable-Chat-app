@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 import { useState } from "react";
 import { toast } from "sonner";
+import { useNavigate } from "react-router-dom";
 
 interface UserData {
   user?: {
@@ -15,6 +16,7 @@ interface UserData {
 }
 
 export default function Register() {
+  const navigate = useNavigate();
   const [isLoading, setIsLoading] = useState(false);
   const [formData, setFormData] = useState<{ username: string }>({
     username: '',
@@ -51,6 +53,7 @@ export default function Register() {
           room: 'default'
         }));
         toast.success(`Welcome, ${formData.username}!`);
+        navigate('/chat');
       } else {
         toast.error(data.error || 'Failed to register. Please try again.');
       }
