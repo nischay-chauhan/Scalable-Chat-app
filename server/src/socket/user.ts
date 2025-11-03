@@ -7,6 +7,14 @@ export const addUser = async(username : string , room : string) => {
     try{
         await new Promise((resolve , reject) => {
             db.run(
+                "INSERT INTO users (id , username , room) VALUES (?, ?, ?)",
+                [id, username, room],
+                (error) => {
+                  if (error) reject(error);
+                  else resolve(true);
+                }
+              );
+              db.run(
                 "INSERT INTO users (id , username , room) VALUES (?, ?, ?)" , 
                 id, username, room,
                 (error) => {
@@ -50,28 +58,24 @@ export const removeUser = async(id : string) => {
 }
 
 
-export const getUserByUsername = async(username : string) => {
-    try{
-        const user = await new Promise<any>((resolve , reject) => {
-            db.all(
-                "SELECT * FROM users WHERE username = ?" , 
-                username,
-                (error , rows) => {
-                    if(error){
-                        reject(error)
-                    }else{
-                        resolve(rows && rows[0] ? rows[0] : null)
-                    }
-                }
-            )
-        })
-        return {success : true , user}
-
-    }catch(error : any){
-       return {success : false , error : error.toString()}
+export const getUserByUsername = async (username: string) => {
+    try {
+      const user = await new Promise<any>((resolve, reject) => {
+        db.get(
+          "SELECT * FROM users WHERE username = ?",
+          [username],
+          (error, row) => {
+            if (error) reject(error);
+            else resolve(row);
+          }
+        );
+      });
+      return { success: true, user };
+    } catch (error: any) {
+      return { success: false, error: error.toString() };
     }
-}
-
+  };
+  
 
 export const getUsersInRoom = async (room:string) => {
     try{

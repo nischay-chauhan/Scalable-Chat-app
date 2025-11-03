@@ -2,6 +2,8 @@ import express from "express";
 import http from 'http'
 import {Server} from "socket.io"
 import userRoutes from "./routes/userRoutes";
+import roomRoutes from "./routes/roomRoutes";
+import authRoutes from "./routes/authRoutes";
 import cors from "cors";
 const app = express()
 
@@ -14,7 +16,9 @@ const io = new Server(server , {
     }
 })
 
-app.use("/api", userRoutes);
+app.use("/api/users", userRoutes);
+app.use("/api/rooms", roomRoutes);
+app.use("/api/auth", authRoutes);
 
 io.on("connection" , (socket) => {
     console.log("New connection : " , socket.id);
