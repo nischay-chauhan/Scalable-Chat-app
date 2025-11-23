@@ -8,6 +8,7 @@ import cors from "cors";
 import { addMemberToRoom, removeMemberFromRoom } from "./socket/user";
 import { addMessage } from "./socket/messages";
 import { ChatMessage } from "./socket/type";
+import { pub, sub, subscribeToRoom, publishMessage } from "./services/redis";
 const app = express()
 
 app.use(express.json());
@@ -23,6 +24,14 @@ app.use("/api/users", userRoutes);
 app.use("/api/rooms", roomRoutes);
 app.use("/api/auth", authRoutes);
 
+sub.on("message", (channel, message) => {
+    console.log(`Redis message on ${channel}:`, message);
+    const roomId = channel.split(":")[1];
+    if (roomId) {
+        io.to(roomId).emit("message", JSON.parse(message));
+    }
+});
+
 io.on("connection", (socket) => {
     console.log("New connection : ", socket.id);
 
@@ -31,6 +40,7 @@ io.on("connection", (socket) => {
         const result = await addMemberToRoom(username, roomId);
         if (result.success) {
             socket.join(roomId);
+            subscribeToRoom(roomId); // Subscribe this server instance to the room channel
             console.log(`User ${username} joined room ${roomId}`);
             io.to(roomId).emit("user_joined", { username, roomId });
         } else {
@@ -42,7 +52,7 @@ io.on("connection", (socket) => {
         console.log("Message received: ", msg);
         const result = await addMessage(msg);
         if (result.success) {
-            io.to(msg.room_id).emit("message", msg);
+            publishMessage(msg.room_id, msg);
         } else {
             console.error("Error adding message:", result.error);
             socket.emit("error", { message: "Failed to send message" });
