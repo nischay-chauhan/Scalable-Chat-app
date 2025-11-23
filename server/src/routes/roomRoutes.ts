@@ -5,16 +5,18 @@ import { authMiddleware, AuthRequest } from "../middleware/auth";
 const router = Router();
 
 router.post("/", authMiddleware, (req: AuthRequest, res: Response) => {
-  const { name } = req.body;
+  const { name, isPrivate, accessCode } = req.body;
   if (!name) {
     return res.status(400).json({ success: false, error: "Room name is required" });
   }
 
   const roomId = generateId();
+  const is_private = isPrivate || false;
+  const access_code = isPrivate && accessCode ? accessCode : null;
 
   db.run(
-    "INSERT INTO rooms (id, name, created_by) VALUES (?, ?, ?)",
-    roomId, name, req.user?.id,
+    "INSERT INTO rooms (id, name, created_by, is_private, access_code) VALUES (?, ?, ?, ?, ?)",
+    roomId, name, req.user?.id, is_private, access_code,
     (err: Error | null) => {
       if (err) {
         return res.status(400).json({
@@ -29,7 +31,7 @@ router.post("/", authMiddleware, (req: AuthRequest, res: Response) => {
         () => {
           res.status(201).json({
             success: true,
-            room: { id: roomId, name, created_by: req.user?.id }
+            room: { id: roomId, name, created_by: req.user?.id, is_private, access_code: access_code ? "***" : null }
           });
         }
       );
@@ -37,14 +39,20 @@ router.post("/", authMiddleware, (req: AuthRequest, res: Response) => {
   );
 });
 
-// Join a room
 router.post("/:roomId/join", authMiddleware, (req: AuthRequest, res: Response) => {
   const { roomId } = req.params;
+  const { accessCode } = req.body || {};
 
-  db.all("SELECT id FROM rooms WHERE id = ?", roomId, (err: Error | null, rows: any[]) => {
+  db.all("SELECT id, is_private, access_code FROM rooms WHERE id = ?", roomId, (err: Error | null, rows: any[]) => {
     const room = rows && rows.length > 0 ? rows[0] : null;
     if (err || !room) {
       return res.status(404).json({ success: false, error: "Room not found" });
+    }
+
+    if (room.is_private === true || room.is_private === 1) {
+      if (!accessCode || accessCode !== room.access_code) {
+        return res.status(403).json({ success: false, error: "Invalid access code" });
+      }
     }
 
     db.run(
@@ -60,14 +68,13 @@ router.post("/:roomId/join", authMiddleware, (req: AuthRequest, res: Response) =
   });
 });
 
-// Get all rooms for current user
 router.get("/my-rooms", authMiddleware, (req: AuthRequest, res: Response) => {
   db.all(
     `SELECT r.* FROM rooms r 
      JOIN room_members rm ON r.id = rm.room_id 
      WHERE rm.user_id = ? 
      ORDER BY r.created_at DESC`,
-    [req.user?.id],
+    req.user?.id,
     (err: Error | null, rooms: any[]) => {
       if (err) {
         return res.status(500).json({ success: false, error: "Failed to fetch rooms" });
@@ -77,12 +84,10 @@ router.get("/my-rooms", authMiddleware, (req: AuthRequest, res: Response) => {
   );
 });
 
-// Get room details with members
 router.get("/:roomId", authMiddleware, (req: AuthRequest, res: Response) => {
   const { roomId } = req.params;
 
   db.serialize(() => {
-    // Get room info
     db.all(
       `SELECT r.*, u.username as created_by_username 
        FROM rooms r 
@@ -95,7 +100,6 @@ router.get("/:roomId", authMiddleware, (req: AuthRequest, res: Response) => {
           return res.status(404).json({ success: false, error: "Room not found" });
         }
 
-        // Get room members
         db.all(
           `SELECT u.id, u.username 
            FROM users u 
@@ -107,7 +111,6 @@ router.get("/:roomId", authMiddleware, (req: AuthRequest, res: Response) => {
               return res.status(500).json({ success: false, error: "Failed to fetch room members" });
             }
 
-            // Get messages
             db.all(
               `SELECT m.*, u.username as author 
                FROM messages m 
@@ -137,7 +140,6 @@ router.get("/:roomId", authMiddleware, (req: AuthRequest, res: Response) => {
   });
 });
 
-// Send message to room
 router.post("/:roomId/messages", authMiddleware, (req: AuthRequest, res: Response) => {
   const { roomId } = req.params;
   const { text } = req.body;
@@ -146,7 +148,6 @@ router.post("/:roomId/messages", authMiddleware, (req: AuthRequest, res: Respons
     return res.status(400).json({ success: false, error: "Message text is required" });
   }
 
-  // Verify user is a member of the room
   db.all(
     "SELECT 1 FROM room_members WHERE user_id = ? AND room_id = ?",
     req.user?.id, roomId,
@@ -166,7 +167,6 @@ router.post("/:roomId/messages", authMiddleware, (req: AuthRequest, res: Respons
             return res.status(500).json({ success: false, error: "Failed to send message" });
           }
 
-          // Return the created message
           db.all(
             `SELECT m.*, u.username as author 
              FROM messages m 
