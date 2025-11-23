@@ -4,12 +4,12 @@ import db from "../db";
 
 const router = Router();
 
-// ✅ MUST apply authMiddleware
 router.get("/me", authMiddleware, (req: AuthRequest, res: Response) => {
-  db.get(
-    "SELECT id, username, created_at FROM users WHERE id = ?", 
-    [req.user?.id], 
-    (err: Error | null, user: any) => {
+  db.all(
+    "SELECT id, username, created_at FROM users WHERE id = ?",
+    req.user?.id,
+    (err: Error | null, rows: any[]) => {
+      const user = rows && rows.length > 0 ? rows[0] : null;
       if (err || !user) {
         return res.status(404).json({ success: false, error: "User not found" });
       }
@@ -26,7 +26,7 @@ router.put("/me", authMiddleware, (req: AuthRequest, res: Response) => {
 
   db.run(
     "UPDATE users SET username = ? WHERE id = ?",
-    [username, req.user?.id],
+    username, req.user?.id,
     function (this: { changes: number }, err: Error | null) {
       if (err) {
         return res.status(400).json({
