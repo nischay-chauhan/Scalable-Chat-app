@@ -5,8 +5,8 @@ import userRoutes from "./routes/userRoutes";
 import roomRoutes from "./routes/roomRoutes";
 import authRoutes from "./routes/authRoutes";
 import cors from "cors";
-import { addMemberToRoom, removeMemberFromRoom } from "./socket/user";
-import { addMessage } from "./socket/messages";
+import { addMemberToRoom, removeMemberFromRoom, getUserByUsername } from "./socket/user";
+import { addMessage, addReceipt, getUnreadMessages } from "./socket/messages";
 import { ChatMessage } from "./socket/type";
 import { pub, sub, subscribeToRoom, publishMessage } from "./services/redis";
 const app = express()
@@ -40,9 +40,27 @@ io.on("connection", (socket) => {
         const result = await addMemberToRoom(username, roomId);
         if (result.success) {
             socket.join(roomId);
-            subscribeToRoom(roomId); // Subscribe this server instance to the room channel
+            subscribeToRoom(roomId); 
             console.log(`User ${username} joined room ${roomId}`);
             io.to(roomId).emit("user_joined", { username, roomId });
+
+            // Sync offline messages
+            const { user } = await getUserByUsername(username);
+            if (user) {
+                const { messages } = await getUnreadMessages(user.id, roomId);
+                if (messages && messages.length > 0) {
+                    // Send pending messages to user
+                    socket.emit("pending_messages", messages);
+
+                    // Mark as delivered and notify senders
+                    for (const msg of messages) {
+                        await addReceipt(msg.id, user.id, 'delivered');
+                        // Notify sender (via Redis/Room) that message was delivered
+                        const receiptUpdate = { messageId: msg.id, userId: user.id, status: 'delivered', roomId };
+                        publishMessage(roomId, { type: 'receipt', ...receiptUpdate });
+                    }
+                }
+            }
         } else {
             socket.emit("error", { message: result.error });
         }
@@ -52,10 +70,29 @@ io.on("connection", (socket) => {
         console.log("Message received: ", msg);
         const result = await addMessage(msg);
         if (result.success) {
-            publishMessage(msg.room_id, msg);
+            const fullMsg = { ...msg, id: result.id }; 
+            publishMessage(msg.room_id, { type: 'message', ...fullMsg });
         } else {
             console.error("Error adding message:", result.error);
             socket.emit("error", { message: "Failed to send message" });
+        }
+    });
+
+    socket.on("mark_delivered", async (data: { messageId: string, username: string, roomId: string }) => {
+        const { messageId, username, roomId } = data;
+        const { user } = await getUserByUsername(username);
+        if (user) {
+            await addReceipt(messageId, user.id, 'delivered');
+            publishMessage(roomId, { type: 'receipt', messageId, userId: user.id, status: 'delivered', roomId });
+        }
+    });
+
+    socket.on("mark_read", async (data: { messageId: string, username: string, roomId: string }) => {
+        const { messageId, username, roomId } = data;
+        const { user } = await getUserByUsername(username);
+        if (user) {
+            await addReceipt(messageId, user.id, 'read');
+            publishMessage(roomId, { type: 'receipt', messageId, userId: user.id, status: 'read', roomId });
         }
     });
 

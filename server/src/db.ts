@@ -1,7 +1,7 @@
 import duckdb from "duckdb";
 import { randomUUID } from "node:crypto";
 
-const db = new duckdb.Database("chat.db"); 
+const db = new duckdb.Database("chat.db");
 
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
@@ -30,6 +30,15 @@ CREATE TABLE IF NOT EXISTS messages (
   room_id STRING NOT NULL REFERENCES rooms(id),
   text STRING NOT NULL,
   timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS message_receipts (
+  id STRING PRIMARY KEY,
+  message_id STRING NOT NULL REFERENCES messages(id),
+  user_id STRING NOT NULL REFERENCES users(id),
+  status STRING NOT NULL, -- 'delivered', 'read'
+  timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  UNIQUE(message_id, user_id)
 );
 `);
 
