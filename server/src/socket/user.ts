@@ -2,21 +2,20 @@ import db from "../db";
 import { User } from "./type";
 
 export const getUserByUsername = async (username: string) => {
-    try {
-        const user = await new Promise<any>((resolve, reject) => {
-            db.all(
-                "SELECT * FROM users WHERE username = ?",
-                [username],
-                (error, rows) => {
-                    if (error) reject(error);
-                    else resolve(rows.length > 0 ? rows[0] : null);
+    return new Promise<any>((resolve, reject) => {
+        db.all(
+            "SELECT * FROM users WHERE username = ?",
+            [username],
+            (error, rows) => {
+                if (error) return reject(error);
+                if (!rows || rows.length === 0) {
+                    return resolve({ success: false, error: "User not found" });
                 }
-            );
-        });
-        return { success: true, user };
-    } catch (error: any) {
-        return { success: false, error: error.toString() };
-    }
+                const user = rows[0];
+                resolve({ success: true, user });
+            }
+        );
+    });
 };
 
 export const addMemberToRoom = async (username: string, roomId: string) => {

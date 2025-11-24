@@ -21,7 +21,8 @@ router.post("/register", async (req: Request, res: Response) => {
       id, username, hashed,
       (err: Error | null) => {
         if (err) {
-          return res.status(400).json({ success: false, error: "Username taken" });
+          // Return a more descriptive error message
+          return res.status(400).json({ success: false, error: "Username already exists" });
         }
         const token = jwt.sign({ id }, JWT_SECRET, { expiresIn: "7d" });
         res.status(201).json({
@@ -39,24 +40,27 @@ router.post("/register", async (req: Request, res: Response) => {
 
 router.post("/login", (req: Request, res: Response) => {
   const { username, password } = req.body;
+  if (!username || !password) {
+    return res.status(400).json({ success: false, error: "username & password required" });
+  }
 
   db.all("SELECT * FROM users WHERE username = ?", username, async (err: Error | null, rows: any[]) => {
     const user = rows && rows.length > 0 ? rows[0] : null;
     if (err || !user) {
-      return res.status(400).json({ success: false, error: "Invalid credentials" });
+      return res.status(401).json({ success: false, error: "Invalid credentials" });
     }
 
     try {
       const match = await bcrypt.compare(password, user.password);
       if (!match) {
-        return res.status(400).json({ success: false, error: "Invalid credentials" });
+        return res.status(401).json({ success: false, error: "Invalid credentials" });
       }
 
       const token = jwt.sign({ id: user.id }, JWT_SECRET, { expiresIn: "7d" });
       res.json({
         success: true,
         user: { id: user.id, username: user.username },
-        token
+        token,
       });
     } catch (error) {
       console.error("Login error:", error);
@@ -64,5 +68,6 @@ router.post("/login", (req: Request, res: Response) => {
     }
   });
 });
+
 
 export default router;
