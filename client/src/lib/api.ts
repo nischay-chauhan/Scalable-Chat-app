@@ -1,59 +1,29 @@
-export const API_BASE_URL = 'http://localhost:3001';
+import axios from "axios";
 
-export interface ApiResponse<T = any> {
-  success: boolean;
-  data?: T;
-  error?: string;
-}
+const api = axios.create({
+  baseURL: import.meta.env.VITE_API_URL || "http://localhost:8080",
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
-export async function apiFetch<T = any>(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<ApiResponse<T>> {
-  try {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
+// Add request interceptor to include auth token
+api.interceptors.request.use(
+  (config) => {
+    // Don't add auth header for login/register endpoints
+    const isAuthEndpoint = config.url?.includes("/auth/login") || config.url?.includes("/auth/register");
 
-    const data = await response.json();
-    
-    if (!response.ok) {
-      return {
-        success: false,
-        error: data.error || 'Something went wrong',
-      };
+    if (!isAuthEndpoint) {
+      const token = localStorage.getItem("token");
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
     }
-
-    return {
-      success: true,
-      data,
-    };
-  } catch (error) {
-    console.error('API Error:', error);
-    return {
-      success: false,
-      error: 'Failed to connect to the server',
-    };
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
-}
+);
 
-export const userApi = {
-  create: async (username: string, room: string) => 
-    apiFetch('/users', {
-      method: 'POST',
-      body: JSON.stringify({ username, room }),
-    }),
-  
-  search: async (username: string) =>
-    apiFetch(`/users/by-username/${encodeURIComponent(username)}`),
-  
-  getRoomUsers: async (room: string) =>
-    apiFetch(`/users?room=${encodeURIComponent(room)}`),
-  
-  remove: async (id: string) =>
-    apiFetch(`/users/${id}`, { method: 'DELETE' }),
-};
+export default api;
